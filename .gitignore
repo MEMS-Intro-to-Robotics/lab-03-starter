@@ -21,3 +21,6 @@ build/
 # Other generated files
 # Ignoring other temporary or generated files.
 *.DS_Store
+
+# Python test artifacts
+.pytest_cache/
