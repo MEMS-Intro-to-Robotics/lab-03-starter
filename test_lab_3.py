@@ -11,7 +11,6 @@ answers are correct; course staff grade those from the report.
 
 from __future__ import annotations
 
-import struct
 import subprocess
 import warnings
 from pathlib import Path
@@ -24,6 +23,13 @@ REQUIRED_SCRIPTS = (
 )
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"}
+IMAGE_SIGNATURES = (
+    b"\x89PNG\r\n\x1a\n",  # PNG
+    b"\xff\xd8\xff",         # JPEG
+    b"GIF87a",
+    b"GIF89a",
+    b"BM",                    # BMP
+)
 EXPECTED_SCREENSHOT = "turtlesim_letters"
 
 README_STARTER_FINGERPRINT = "Update this README"
@@ -42,11 +48,16 @@ def _run_git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _png_dimensions(path: Path) -> tuple[int, int] | None:
-    data = path.read_bytes()[:24]
-    if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n" or data[12:16] != b"IHDR":
-        return None
-    return struct.unpack(">II", data[16:24])
+def _is_image(path: Path) -> bool:
+    """True when the file starts with a PNG, JPEG, GIF, BMP, or WebP signature.
+
+    The extension is not trusted either way: a JPEG saved under a .png name is
+    still a screenshot, and a text file under a .jpg name is not.
+    """
+    head = path.read_bytes()[:12]
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return True
+    return any(head.startswith(signature) for signature in IMAGE_SIGNATURES)
 
 
 def _images(repo: Path) -> list[Path]:
@@ -97,8 +108,11 @@ def check_required_files(repo: Path) -> list[str]:
         # Any image counts as the deliverable. The filename is a convention,
         # not the skill, so a non-standard name warns rather than fails.
         for image in images:
-            if image.suffix.lower() == ".png" and _png_dimensions(image) is None:
-                errors.append(f"docs/{image.name} is not a valid PNG image")
+            if not _is_image(image):
+                errors.append(
+                    f"docs/{image.name} is not a valid image file; save the "
+                    "screenshot again as a PNG"
+                )
         stems = {p.stem.casefold() for p in images}
         if EXPECTED_SCREENSHOT not in stems:
             warnings.warn(
